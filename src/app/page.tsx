@@ -1,5 +1,6 @@
 'use client'
 
+import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { MusicSection } from '@/components/MusicSection'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { SummarySection } from '@/components/SummarySection'
@@ -67,6 +68,11 @@ export default function Home() {
   async function fetchMusic() {
     if (areActionsDisabled) return
 
+    if (!settings.apiKey) {
+      setError('A Gemini API key is required for AI features. Add one in Settings.')
+      return
+    }
+
     setError(null)
     setLoading('music')
 
@@ -92,6 +98,11 @@ export default function Home() {
 
   async function fetchSummary() {
     if (areActionsDisabled) return
+
+    if (!settings.apiKey) {
+      setError('A Gemini API key is required for AI features. Add one in Settings.')
+      return
+    }
 
     setError(null)
     setLoading('summary')
@@ -272,6 +283,31 @@ export default function Home() {
 
       {toast && (
         <Toast message={toast} toastKey={toastKey} exiting={toastExiting} />
+      )}
+
+      {loading === 'info' && (
+        <LoadingOverlay
+          title="Fetching video info..."
+          subtitle="Retrieving metadata from YouTube"
+        />
+      )}
+      {loading === 'summary' && (
+        <LoadingOverlay
+          title="Summarizing video..."
+          subtitle="AI is analyzing the content"
+        />
+      )}
+      {loading === 'music' && (
+        <LoadingOverlay
+          title="Identifying music..."
+          subtitle="AI is listening for tracks"
+        />
+      )}
+      {isDownloading && (
+        <LoadingOverlay
+          title={`Downloading ${activeDownloadFormat?.toUpperCase()}...`}
+          subtitle="Preparing your file"
+        />
       )}
     </main>
   )

@@ -9,7 +9,7 @@ import {
   type VideoProfile,
   type VideoQuality,
 } from '@/lib/types'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function getStoredValue(
   key: string,
@@ -60,6 +60,18 @@ function getStoredAudioFormat(): AudioFormat {
     : 'mp3'
 }
 
+export type Theme = 'light' | 'dark'
+
+function getStoredTheme(): Theme {
+  if (typeof window === 'undefined') return 'dark'
+  const saved = localStorage.getItem('theme')
+  return saved === 'light' ? 'light' : 'dark'
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
 export function useSettings() {
   const [apiKey, setApiKey] = useState(() =>
     getStoredValue('gemini_api_key', '', 'session'),
@@ -82,6 +94,11 @@ export function useSettings() {
   const [audioFormat, setAudioFormat] = useState<AudioFormat>(() =>
     getStoredAudioFormat(),
   )
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
 
   function saveApiKey(key: string) {
     setApiKey(key)
@@ -135,6 +152,11 @@ export function useSettings() {
     localStorage.setItem('audio_format', format)
   }
 
+  function saveTheme(t: Theme) {
+    setTheme(t)
+    localStorage.setItem('theme', t)
+  }
+
   return {
     apiKey,
     model,
@@ -150,5 +172,7 @@ export function useSettings() {
     saveVideoQuality,
     saveVideoProfile,
     saveAudioFormat,
+    theme,
+    saveTheme,
   }
 }

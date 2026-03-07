@@ -422,18 +422,33 @@ export async function getVideoInfo(url: string): Promise<{
 }> {
   const cleanUrl = cleanVideoUrl(url)
   const ytDlpInfo = await getYtDlpInfo(cleanUrl)
-  const basicInfo = await ytdl.getBasicInfo(cleanUrl)
-  let info = basicInfo
+
+  // ytdl-core often fails on cloud providers (YouTube blocks datacenter IPs),
+  // so treat it as optional and fall back to yt-dlp data.
+  let ytdlDetails: { title: string; lengthSeconds: string; thumbnails: Array<{ url: string }> } | null = null
+  let ytdlFormats: YtdlFormat[] = []
 
   try {
-    info = await ytdl.getInfo(cleanUrl)
+    const basicInfo = await ytdl.getBasicInfo(cleanUrl)
+    let info = basicInfo
+    try {
+      info = await ytdl.getInfo(cleanUrl)
+    } catch {
+      info = basicInfo
+    }
+    ytdlDetails = info.videoDetails
+    ytdlFormats = getAvailableFormats(info)
   } catch {
-    info = basicInfo
+    // ytdl-core unavailable — rely on yt-dlp
   }
-  const details = info.videoDetails
-  const formats = getAvailableFormats(info)
 
-  const totalSeconds = parseInt(details.lengthSeconds, 10)
+  if (!ytDlpInfo && !ytdlDetails) {
+    throw new Error('Could not retrieve video info from any source.')
+  }
+
+  const totalSeconds = ytDlpInfo?.duration
+    ? Math.round(ytDlpInfo.duration)
+    : parseInt(ytdlDetails?.lengthSeconds || '0', 10)
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
@@ -442,15 +457,15 @@ export async function getVideoInfo(url: string): Promise<{
       ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
       : `${minutes}:${String(seconds).padStart(2, '0')}`
 
-  const thumbnails = details.thumbnails
+  const ytdlThumbnails = ytdlDetails?.thumbnails || []
   const thumbnail =
     ytDlpInfo?.thumbnail ||
     ytDlpInfo?.thumbnails?.[ytDlpInfo.thumbnails.length - 1]?.url ||
-    (thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : '')
+    (ytdlThumbnails.length > 0 ? ytdlThumbnails[ytdlThumbnails.length - 1].url : '')
 
   const highestQuality = ytDlpInfo?.formats?.length
     ? getYtDlpHighestQuality(ytDlpInfo.formats)
-    : formats
+    : ytdlFormats
         .filter((format) => format.hasVideo && format.qualityLabel)
         .sort(
           (left, right) =>
@@ -461,7 +476,7 @@ export async function getVideoInfo(url: string): Promise<{
   const estimatedMp3Size = estimateAudioSize(totalSeconds, 192)
   const estimatedMp4Size = ytDlpInfo?.formats?.length
     ? estimateMp4SizeFromYtDlp(ytDlpInfo.formats, totalSeconds)
-    : estimateMp4Size(formats)
+    : estimateMp4Size(ytdlFormats)
   const estimatedMp3Sizes = Object.fromEntries(
     AUDIO_QUALITIES.map((quality) => [
       quality,
@@ -498,7 +513,7 @@ export async function getVideoInfo(url: string): Promise<{
   } satisfies Record<VideoProfile, Record<VideoQuality, string>>
 
   return {
-    title: ytDlpInfo?.title || details.title,
+    title: ytDlpInfo?.title || ytdlDetails?.title || 'Unknown',
     duration,
     durationSeconds: totalSeconds,
     thumbnail,

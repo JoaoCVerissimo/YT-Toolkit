@@ -51,7 +51,13 @@ A self-hosted web app to download, summarize, and analyze YouTube videos. Built 
 - [ffmpeg](https://ffmpeg.org/) (bundled via `ffmpeg-static` or available on PATH) — required for MP3 conversion and MP4 merging
 - A [Gemini API key](https://aistudio.google.com/apikey) (free, required only for AI features)
 
+## Live Demo
+
+Deployed on [Render](https://render.com/) — [yt-toolkit.onrender.com](https://yt-toolkit-sazr.onrender.com/)
+
 ## Getting Started
+
+### Local development
 
 ```bash
 npm install
@@ -59,6 +65,21 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Deploy to Render
+
+1. Connect your GitHub repo on [Render](https://render.com/)
+2. Use the following settings:
+
+| Setting            | Value                                            |
+| ------------------ | ------------------------------------------------ |
+| **Root Directory** | _(leave blank)_                                  |
+| **Build Command**  | `npm install; pip install yt-dlp; npm run build` |
+| **Start Command**  | `npm run start`                                  |
+
+> `yt-dlp` is installed via pip at build time since `youtube-dl-exec` requires the system binary.
+
+No environment variables are required — users provide their own Gemini API key through the app's settings.
 
 ## Tech Stack
 

@@ -1,4 +1,5 @@
 import { AVAILABLE_MODELS } from '@/lib/models'
+import type { Theme } from '@/hooks/useSettings'
 import {
   AUDIO_FORMAT_OPTIONS,
   AUDIO_QUALITY_OPTIONS,
@@ -19,6 +20,7 @@ interface SettingsPanelProps {
   videoQuality: VideoQuality
   videoProfile: VideoProfile
   audioFormat: AudioFormat
+  theme: Theme
   saveApiKey: (key: string) => void
   saveModel: (model: string) => void
   saveDownloadMode: (mode: DownloadMode) => void
@@ -26,6 +28,7 @@ interface SettingsPanelProps {
   saveVideoQuality: (quality: VideoQuality) => void
   saveVideoProfile: (profile: VideoProfile) => void
   saveAudioFormat: (format: AudioFormat) => void
+  saveTheme: (theme: Theme) => void
 }
 
 export function SettingsPanel({
@@ -36,6 +39,7 @@ export function SettingsPanel({
   videoQuality,
   videoProfile,
   audioFormat,
+  theme,
   saveApiKey,
   saveModel,
   saveDownloadMode,
@@ -43,13 +47,32 @@ export function SettingsPanel({
   saveVideoQuality,
   saveVideoProfile,
   saveAudioFormat,
+  saveTheme,
 }: SettingsPanelProps) {
   return (
     <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
       <h3 className="mb-3 text-lg font-semibold">Settings</h3>
       <div className="space-y-6">
         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
-          <h4 className="mb-3 text-base font-semibold">Common</h4>
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="text-base font-semibold">Common</h4>
+            <button
+              onClick={() => saveTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="rounded-lg p-1.5 transition-colors hover:bg-gray-200 dark:hover:bg-gray-800"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                </svg>
+              )}
+            </button>
+          </div>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium">

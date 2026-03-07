@@ -526,10 +526,7 @@ function downloadFollowPipeline(params: DownloadParams): Response {
 
   ffmpegChild.once('close', (code) => {
     if (code !== 0) {
-      console.error(
-        `[yt-toolkit] conversion failed (${downloadId}):`,
-        stderr,
-      )
+      console.error(`[yt-toolkit] conversion failed (${downloadId}):`, stderr)
       finalizeDownloadJob(downloadId, 'failed', 'Download failed.')
     } else {
       finalizeDownloadJob(downloadId, 'completed')
@@ -609,10 +606,7 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
   const actualFile = await new Promise<string>((resolve, reject) => {
     child.once('close', (code) => {
       if (code !== 0) {
-        console.error(
-          `[yt-toolkit] download failed (${downloadId}):`,
-          stderr,
-        )
+        console.error(`[yt-toolkit] download failed (${downloadId}):`, stderr)
         finalizeDownloadJob(downloadId, 'failed', 'Download failed.')
         reject(new Error('Download failed'))
         return

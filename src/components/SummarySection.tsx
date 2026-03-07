@@ -80,23 +80,29 @@ export function SummarySection({
   const [showTranscript, setShowTranscript] = useState(false)
 
   async function exportAsPdf() {
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF()
-    const text = buildResultsText(videoInfo, summaryData)
-    const lines = doc.splitTextToSize(text, 180)
-
-    let y = 20
-    lines.forEach((line: string) => {
-      if (y > 270) {
-        doc.addPage()
-        y = 20
-      }
-
-      doc.text(line, 15, y)
-      y += 7
+    const res = await fetch('/api/export-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: videoInfo?.title,
+        duration: videoInfo?.duration,
+        summary: summaryData.summary,
+        keyPoints: summaryData.keyPoints,
+        transcript: summaryData.transcript,
+      }),
     })
 
-    doc.save(`${videoInfo?.title || 'youtube-summary'}.pdf`)
+    if (!res.ok) {
+      showToast('Failed to generate PDF.')
+      return
+    }
+
+    const blob = await res.blob()
+    triggerDownload(
+      `${videoInfo?.title || 'youtube-summary'}.pdf`,
+      blob,
+      'application/pdf',
+    )
     showToast('PDF exported.')
   }
 
