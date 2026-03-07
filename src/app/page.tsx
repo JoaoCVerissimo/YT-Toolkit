@@ -70,7 +70,7 @@ export default function Home() {
     if (areActionsDisabled) return
 
     if (!settings.apiKey) {
-      setError('A Gemini API key is required for AI features. Add one in Settings.')
+      showToast('A Gemini API key is required for AI features. Add one in Settings.')
       return
     }
 
@@ -101,7 +101,7 @@ export default function Home() {
     if (areActionsDisabled) return
 
     if (!settings.apiKey) {
-      setError('A Gemini API key is required for AI features. Add one in Settings.')
+      showToast('A Gemini API key is required for AI features. Add one in Settings.')
       return
     }
 

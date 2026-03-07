@@ -4,6 +4,15 @@ import { tmpdir } from 'os'
 
 let cookieFilePath: string | null = null
 
+/**
+ * Normalize raw cookie content — some platforms (Render) may store
+ * multiline env vars with literal "\n" instead of actual newlines.
+ */
+function normalizeCookies(raw: string): string {
+  if (raw.includes('\t')) return raw // already has real tabs/newlines
+  return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+}
+
 function getRawCookies(): string | null {
   // Option 1: path to a Netscape cookies.txt file (best for local dev)
   const filePath = process.env.YOUTUBE_COOKIES_FILE
@@ -11,9 +20,9 @@ function getRawCookies(): string | null {
     return readFileSync(filePath, 'utf-8')
   }
 
-  // Option 2: raw cookie content (works on Render which supports multiline env vars)
+  // Option 2: raw cookie content (for production / Render)
   const raw = process.env.YOUTUBE_COOKIES
-  if (raw) return raw
+  if (raw) return normalizeCookies(raw)
 
   return null
 }
@@ -36,8 +45,15 @@ export function getYtDlpCookieFile(): string | null {
   const dir = join(tmpdir(), 'yt-toolkit')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   const path = join(dir, 'cookies.txt')
-  writeFileSync(path, raw, 'utf-8')
+  writeFileSync(path, normalizeCookies(raw), 'utf-8')
   cookieFilePath = path
+
+  // Log cookie count for diagnostics
+  const lines = normalizeCookies(raw).split('\n').filter(
+    (l) => l.trim() && !l.trim().startsWith('#'),
+  )
+  console.log(`[yt-toolkit] cookies loaded: ${lines.length} entries → ${path}`)
+
   return path
 }
 
