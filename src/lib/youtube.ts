@@ -1,20 +1,17 @@
-import ytdl from '@distube/ytdl-core'
-import { spawn } from 'child_process'
-import { existsSync } from 'fs'
-import { join } from 'path'
-
-type YtdlFormat = {
-  hasVideo?: boolean
-  hasAudio?: boolean
-  qualityLabel?: string | null
-  container?: string | null
-  contentLength?: string | null
-  bitrate?: number | null
-  audioBitrate?: number | null
-}
+import { youtubeDl } from 'youtube-dl-exec'
+import Innertube from 'youtubei.js'
 
 type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
-type VideoQuality = '144' | '240' | '360' | '480' | '720' | '1080' | '1440' | '2160' | 'best'
+type VideoQuality =
+  | '144'
+  | '240'
+  | '360'
+  | '480'
+  | '720'
+  | '1080'
+  | '1440'
+  | '2160'
+  | 'best'
 type VideoProfile = 'compatible' | 'best'
 
 const AUDIO_QUALITIES: AudioQuality[] = ['64k', '128k', '192k', '256k', '320k']
@@ -60,50 +57,93 @@ type YtDlpInfo = {
   automatic_captions?: Record<string, YtDlpSubtitleTrack[]>
 }
 
-function getYtDlpPath(): string {
-  const candidate = join(
-    process.cwd(),
-    'node_modules',
-    'youtube-dl-exec',
-    'bin',
-    'yt-dlp',
-  )
+async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
+  try {
+    const yt = await Innertube.create()
+    const info = await yt.getBasicInfo(videoId)
 
-  return existsSync(candidate) ? candidate : 'yt-dlp'
+    const allFormats = [
+      ...(info.streaming_data?.formats || []),
+      ...(info.streaming_data?.adaptive_formats || []),
+    ]
+
+    const formats: YtDlpFormat[] = allFormats.map((f) => {
+      const mime = f.mime_type || ''
+      const codecMatch = mime.match(/codecs="([^"]+)"/)
+      const codecStr = codecMatch?.[1] || ''
+      const codecs = codecStr.split(',').map((c) => c.trim())
+
+      const isVideo = f.has_video
+      const isAudio = f.has_audio
+      const videoCodec =
+        codecs.find(
+          (c) =>
+            c.startsWith('avc') ||
+            c.startsWith('vp') ||
+            c.startsWith('av01') ||
+            c.startsWith('hev'),
+        ) || null
+      const audioCodec =
+        codecs.find(
+          (c) =>
+            c.startsWith('mp4a') || c.startsWith('opus') || c.startsWith('aac'),
+        ) || null
+
+      return {
+        height: isVideo ? (f.height ?? null) : null,
+        vcodec: isVideo ? videoCodec || codecs[0] || 'none' : 'none',
+        acodec: isAudio ? audioCodec || codecs[0] || 'none' : 'none',
+        ext: mime.includes('mp4') || mime.includes('m4a') ? 'mp4' : 'webm',
+        audio_ext:
+          isAudio && !isVideo
+            ? mime.includes('mp4')
+              ? 'm4a'
+              : 'webm'
+            : 'none',
+        filesize: f.content_length ? Number(f.content_length) : null,
+        filesize_approx: null,
+        tbr: f.bitrate ? f.bitrate / 1000 : null,
+        vbr: null,
+        abr: null,
+        format_note: f.quality_label || null,
+        resolution: f.width && f.height ? `${f.width}x${f.height}` : null,
+      }
+    })
+
+    const thumbnails = info.basic_info.thumbnail || []
+
+    return {
+      title: info.basic_info.title || null,
+      duration: info.basic_info.duration || null,
+      thumbnail:
+        thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : null,
+      thumbnails: thumbnails.map((t) => ({ url: t.url })),
+      formats,
+    }
+  } catch (error) {
+    console.error(
+      '[yt-toolkit] innertube info failed:',
+      error instanceof Error ? error.message : error,
+    )
+    return null
+  }
 }
 
 async function getYtDlpInfo(url: string): Promise<YtDlpInfo | null> {
-  return await new Promise((resolve) => {
-    const child = spawn(getYtDlpPath(), [
-      '--dump-single-json',
-      '--no-warnings',
-      '--no-playlist',
-      url,
-    ])
-
-    let stdout = ''
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
+  try {
+    const result = await youtubeDl(url, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noPlaylist: true,
     })
-
-    child.once('close', (code) => {
-      if (code !== 0) {
-        resolve(null)
-        return
-      }
-
-      try {
-        resolve(JSON.parse(stdout) as YtDlpInfo)
-      } catch {
-        resolve(null)
-      }
-    })
-
-    child.once('error', () => {
-      resolve(null)
-    })
-  })
+    return result as unknown as YtDlpInfo
+  } catch (error) {
+    console.error(
+      '[yt-toolkit] yt-dlp info failed:',
+      error instanceof Error ? error.message : error,
+    )
+    return null
+  }
 }
 
 function formatBytes(bytes: number): string {
@@ -121,47 +161,12 @@ function formatBytes(bytes: number): string {
   return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`
 }
 
-function extractQualityHeight(qualityLabel?: string | null): number {
-  if (!qualityLabel) return 0
-  const match = qualityLabel.match(/(\d{3,4})p/)
-  return match ? Number.parseInt(match[1], 10) : 0
-}
-
 function estimateAudioSize(
   durationSeconds: number,
   bitrateKbps: number,
 ): string {
   const bytes = (durationSeconds * bitrateKbps * 1000) / 8
   return formatBytes(bytes)
-}
-
-function estimateMp4Size(formats: YtdlFormat[]): string {
-  const compatibleVideoFormats = formats.filter(
-    (format) =>
-      format.hasVideo &&
-      !format.hasAudio &&
-      format.container === 'mp4' &&
-      format.qualityLabel,
-  )
-  const compatibleAudioFormats = formats.filter(
-    (format) =>
-      format.hasAudio && !format.hasVideo && format.container === 'm4a',
-  )
-
-  const bestVideo = compatibleVideoFormats.sort(
-    (left, right) =>
-      extractQualityHeight(right.qualityLabel) -
-      extractQualityHeight(left.qualityLabel),
-  )[0]
-  const bestAudio = compatibleAudioFormats.sort(
-    (left, right) => (right.audioBitrate || 0) - (left.audioBitrate || 0),
-  )[0]
-
-  const videoBytes = Number.parseInt(bestVideo?.contentLength || '0', 10)
-  const audioBytes = Number.parseInt(bestAudio?.contentLength || '0', 10)
-  const total = videoBytes + audioBytes
-
-  return total > 0 ? formatBytes(total) : 'Unknown'
 }
 
 function getEstimatedBytesFromKbps(
@@ -248,20 +253,6 @@ function estimateMp4SizeFromYtDlp(
   formats: YtDlpFormat[],
   durationSeconds: number,
 ): string {
-  const muxed = formats
-    .filter(
-      (format) =>
-        hasVideoCodec(format) && hasAudioCodec(format) && format.ext === 'mp4',
-    )
-    .sort((left, right) => getYtDlpHeight(right) - getYtDlpHeight(left))[0]
-
-  if (muxed) {
-    const muxedSize = getYtDlpFormatSize(muxed, durationSeconds)
-    if (muxedSize > 0) {
-      return formatBytes(muxedSize)
-    }
-  }
-
   const video = formats
     .filter(
       (format) =>
@@ -290,7 +281,21 @@ function estimateMp4SizeFromYtDlp(
       audio || { filesize: 0, filesize_approx: 0 },
       durationSeconds,
     )
-  return total > 0 ? formatBytes(total) : 'Unknown'
+  if (total > 0) return formatBytes(total)
+
+  // Fall back to best muxed format
+  const muxed = formats
+    .filter(
+      (format) =>
+        hasVideoCodec(format) && hasAudioCodec(format) && format.ext === 'mp4',
+    )
+    .sort((left, right) => getYtDlpHeight(right) - getYtDlpHeight(left))[0]
+  if (muxed) {
+    const muxedSize = getYtDlpFormatSize(muxed, durationSeconds)
+    if (muxedSize > 0) return formatBytes(muxedSize)
+  }
+
+  return 'Unknown'
 }
 
 function estimateMp4SizeForSelection(
@@ -318,14 +323,16 @@ function estimateMp4SizeForSelection(
       : [(f) => f.ext === 'mp4', () => true]
 
   for (const filter of filterChain) {
-    const videoCandidates = heightFiltered.filter(filter).sort((left, right) => {
-      const heightDiff = getYtDlpHeight(right) - getYtDlpHeight(left)
-      if (heightDiff !== 0) return heightDiff
-      return (
-        getYtDlpFormatSize(right, durationSeconds) -
-        getYtDlpFormatSize(left, durationSeconds)
-      )
-    })
+    const videoCandidates = heightFiltered
+      .filter(filter)
+      .sort((left, right) => {
+        const heightDiff = getYtDlpHeight(right) - getYtDlpHeight(left)
+        if (heightDiff !== 0) return heightDiff
+        return (
+          getYtDlpFormatSize(right, durationSeconds) -
+          getYtDlpFormatSize(left, durationSeconds)
+        )
+      })
 
     if (videoCandidates.length === 0) continue
 
@@ -365,29 +372,6 @@ function estimateMp4SizeForSelection(
   return 'Unknown'
 }
 
-function getAvailableFormats(info: unknown): YtdlFormat[] {
-  const maybeInfo = info as {
-    formats?: YtdlFormat[]
-    player_response?: {
-      streamingData?: {
-        formats?: YtdlFormat[]
-        adaptiveFormats?: YtdlFormat[]
-      }
-    }
-  }
-
-  if (Array.isArray(maybeInfo.formats) && maybeInfo.formats.length > 0) {
-    return maybeInfo.formats
-  }
-
-  const streamingFormats =
-    maybeInfo.player_response?.streamingData?.formats || []
-  const adaptiveFormats =
-    maybeInfo.player_response?.streamingData?.adaptiveFormats || []
-
-  return [...streamingFormats, ...adaptiveFormats]
-}
-
 export function extractVideoId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
@@ -421,34 +405,18 @@ export async function getVideoInfo(url: string): Promise<{
   estimatedMp4Sizes: Record<VideoProfile, Record<VideoQuality, string>>
 }> {
   const cleanUrl = cleanVideoUrl(url)
-  const ytDlpInfo = await getYtDlpInfo(cleanUrl)
+  const videoId = extractVideoId(cleanUrl)
 
-  // ytdl-core often fails on cloud providers (YouTube blocks datacenter IPs),
-  // so treat it as optional and fall back to yt-dlp data.
-  let ytdlDetails: { title: string; lengthSeconds: string; thumbnails: Array<{ url: string }> } | null = null
-  let ytdlFormats: YtdlFormat[] = []
+  // Try Innertube first (pure JS, ~200ms), fall back to yt-dlp (~7s)
+  const info =
+    (videoId ? await getInnertubeInfo(videoId) : null) ||
+    (await getYtDlpInfo(cleanUrl))
 
-  try {
-    const basicInfo = await ytdl.getBasicInfo(cleanUrl)
-    let info = basicInfo
-    try {
-      info = await ytdl.getInfo(cleanUrl)
-    } catch {
-      info = basicInfo
-    }
-    ytdlDetails = info.videoDetails
-    ytdlFormats = getAvailableFormats(info)
-  } catch {
-    // ytdl-core unavailable — rely on yt-dlp
+  if (!info) {
+    throw new Error('Could not retrieve video info.')
   }
 
-  if (!ytDlpInfo && !ytdlDetails) {
-    throw new Error('Could not retrieve video info from any source.')
-  }
-
-  const totalSeconds = ytDlpInfo?.duration
-    ? Math.round(ytDlpInfo.duration)
-    : parseInt(ytdlDetails?.lengthSeconds || '0', 10)
+  const totalSeconds = info.duration ? Math.round(info.duration) : 0
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
@@ -457,26 +425,18 @@ export async function getVideoInfo(url: string): Promise<{
       ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
       : `${minutes}:${String(seconds).padStart(2, '0')}`
 
-  const ytdlThumbnails = ytdlDetails?.thumbnails || []
   const thumbnail =
-    ytDlpInfo?.thumbnail ||
-    ytDlpInfo?.thumbnails?.[ytDlpInfo.thumbnails.length - 1]?.url ||
-    (ytdlThumbnails.length > 0 ? ytdlThumbnails[ytdlThumbnails.length - 1].url : '')
+    info.thumbnail || info.thumbnails?.[info.thumbnails.length - 1]?.url || ''
 
-  const highestQuality = ytDlpInfo?.formats?.length
-    ? getYtDlpHighestQuality(ytDlpInfo.formats)
-    : ytdlFormats
-        .filter((format) => format.hasVideo && format.qualityLabel)
-        .sort(
-          (left, right) =>
-            extractQualityHeight(right.qualityLabel) -
-            extractQualityHeight(left.qualityLabel),
-        )[0]?.qualityLabel
+  const formats = info.formats || []
+  const highestQuality = formats.length
+    ? getYtDlpHighestQuality(formats)
+    : 'Unknown'
 
   const estimatedMp3Size = estimateAudioSize(totalSeconds, 192)
-  const estimatedMp4Size = ytDlpInfo?.formats?.length
-    ? estimateMp4SizeFromYtDlp(ytDlpInfo.formats, totalSeconds)
-    : estimateMp4Size(ytdlFormats)
+  const estimatedMp4Size = formats.length
+    ? estimateMp4SizeFromYtDlp(formats, totalSeconds)
+    : 'Unknown'
   const estimatedMp3Sizes = Object.fromEntries(
     AUDIO_QUALITIES.map((quality) => [
       quality,
@@ -487,9 +447,9 @@ export async function getVideoInfo(url: string): Promise<{
     compatible: Object.fromEntries(
       VIDEO_QUALITIES.map((quality) => [
         quality,
-        ytDlpInfo?.formats?.length
+        formats.length
           ? estimateMp4SizeForSelection(
-              ytDlpInfo.formats,
+              formats,
               totalSeconds,
               quality,
               'compatible',
@@ -500,20 +460,15 @@ export async function getVideoInfo(url: string): Promise<{
     best: Object.fromEntries(
       VIDEO_QUALITIES.map((quality) => [
         quality,
-        ytDlpInfo?.formats?.length
-          ? estimateMp4SizeForSelection(
-              ytDlpInfo.formats,
-              totalSeconds,
-              quality,
-              'best',
-            )
+        formats.length
+          ? estimateMp4SizeForSelection(formats, totalSeconds, quality, 'best')
           : estimatedMp4Size,
       ]),
     ) as Record<VideoQuality, string>,
   } satisfies Record<VideoProfile, Record<VideoQuality, string>>
 
   return {
-    title: ytDlpInfo?.title || ytdlDetails?.title || 'Unknown',
+    title: info.title || 'Unknown',
     duration,
     durationSeconds: totalSeconds,
     thumbnail,
@@ -545,25 +500,7 @@ function decodeHtmlEntities(text: string): string {
 export async function getTranscript(videoId: string): Promise<string> {
   const url = `https://www.youtube.com/watch?v=${videoId}`
 
-  // Use yt-dlp to get subtitle info via JSON metadata
-  const info = await new Promise<YtDlpInfo | null>((resolve) => {
-    const child = spawn(getYtDlpPath(), [
-      '--dump-single-json',
-      '--no-warnings',
-      '--no-playlist',
-      url,
-    ])
-
-    let stdout = ''
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
-    })
-    child.once('close', (code) => {
-      if (code !== 0) { resolve(null); return }
-      try { resolve(JSON.parse(stdout) as YtDlpInfo) } catch { resolve(null) }
-    })
-    child.once('error', () => resolve(null))
-  })
+  const info = await getYtDlpInfo(url)
 
   if (!info) {
     throw new Error(`Failed to get video info for: ${videoId}`)

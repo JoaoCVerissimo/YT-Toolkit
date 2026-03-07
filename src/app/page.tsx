@@ -189,7 +189,7 @@ export default function Home() {
   }
 
   return (
-    <main className="bg-background text-foreground min-h-screen">
+    <main className="flex-1">
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-2 flex items-center justify-center gap-3">
           <h1 className="text-center text-4xl font-bold">YT Toolkit</h1>

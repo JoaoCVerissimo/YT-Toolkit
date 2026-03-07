@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId, getVideoInfo } from '@/lib/youtube'
-import { parseBodyUrl, safeErrorMessage } from '@/lib/api-utils'
+import { parseBodyUrl } from '@/lib/api-utils'
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
     const info = await getVideoInfo(url)
     return NextResponse.json({ videoId, ...info })
   } catch (error) {
-    return NextResponse.json(
-      { error: safeErrorMessage(error, 'Failed to fetch video info.') },
-      { status: 500 },
-    )
+    console.error('[api/info] error:', error)
+    const message =
+      error instanceof Error ? error.message : 'Failed to fetch video info.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
