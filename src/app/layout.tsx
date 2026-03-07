@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'YouTube Savior',
+  title: 'YT Toolkit',
   description: 'Summarize and download YouTube videos',
 }
 

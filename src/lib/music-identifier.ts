@@ -1,11 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import { DEFAULT_MODEL } from './models'
-
-export interface IdentifiedTrack {
-  title: string
-  artist: string
-  context?: string
-}
+import type { IdentifiedTrack } from './types'
 
 export async function identifyMusic(
   youtubeUrl: string,

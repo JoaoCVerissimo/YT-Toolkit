@@ -10,7 +10,7 @@ export function safeErrorMessage(
     return real
   }
 
-  console.error(`[youtube-savior] ${fallback}:`, real)
+  console.error(`[yt-toolkit] ${fallback}:`, real)
   return fallback
 }
 

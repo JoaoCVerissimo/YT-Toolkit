@@ -1,6 +1,6 @@
-# YouTube Savior
+# YT Toolkit
 
-A self-hosted web app for summarizing and downloading YouTube videos. Built with Next.js and powered by yt-dlp.
+A self-hosted web app to download, summarize, and analyze YouTube videos. Built with Next.js, powered by yt-dlp and Google Gemini.
 
 ## Features
 
@@ -9,11 +9,12 @@ A self-hosted web app for summarizing and downloading YouTube videos. Built with
 - Fetches video metadata (title, duration, thumbnail, available qualities)
 - Estimates download sizes for each quality and format combination
 
-### AI-powered summarization
+### AI-powered tools (via Google Gemini)
 
-- Generates concise summaries and key points from video transcripts using Google Gemini
-- Configurable model selection
-- Supports manual and automatic captions via yt-dlp
+- **Summarization** — generates concise summaries and key points from video transcripts or directly from the video
+- **Music identification** — identifies songs and music tracks used in a video with artist, title, and context
+- Falls back to direct video analysis when no transcript/captions are available
+- Configurable model selection (Gemini 3 Flash, 3.1 Flash Lite, 3.1 Pro)
 
 ### Export options
 
@@ -40,7 +41,7 @@ A self-hosted web app for summarizing and downloading YouTube videos. Built with
 
 ### Settings
 
-- All preferences (API key, model, download mode, quality, format) are stored locally in the browser via `localStorage`
+- All preferences (API key, model, download mode, quality, format) are stored locally in the browser
 - Dark mode support
 
 ## Prerequisites
@@ -48,7 +49,7 @@ A self-hosted web app for summarizing and downloading YouTube videos. Built with
 - [Node.js](https://nodejs.org/) 18+
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (bundled via `youtube-dl-exec` or available on PATH)
 - [ffmpeg](https://ffmpeg.org/) (bundled via `ffmpeg-static` or available on PATH) — required for MP3 conversion and MP4 merging
-- A [Gemini API key](https://aistudio.google.com/apikey) (free, required only for summarization)
+- A [Gemini API key](https://aistudio.google.com/apikey) (free, required only for AI features)
 
 ## Getting Started
 
@@ -65,5 +66,5 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - [Tailwind CSS](https://tailwindcss.com/)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) via `youtube-dl-exec`
 - [ffmpeg](https://ffmpeg.org/) via `ffmpeg-static`
-- [Google Gemini](https://ai.google.dev/) for AI summarization
+- [Google Gemini](https://ai.google.dev/) for AI summarization and music identification
 - [jsPDF](https://github.com/parallax/jsPDF) for PDF export
