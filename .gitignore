@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# yt-dlp temp fragments (HLS downloads can leave these in cwd)
+--Frag*
+
+# claude code
+.claude/settings.local.json
