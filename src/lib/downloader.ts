@@ -1,4 +1,3 @@
-import { getYtDlpCookieFile } from './cookies'
 import { ChildProcess, spawn } from 'child_process'
 import {
   createReadStream,
@@ -275,15 +274,7 @@ function buildYtDlpArgs(
   videoQuality: VideoQuality,
   videoProfile: VideoProfile,
 ) {
-  const args: string[] = [
-    '--concurrent-fragments', '4',
-    '--extractor-args', 'youtube:player_client=web_creator,mweb',
-  ]
-
-  const cookieFile = getYtDlpCookieFile()
-  if (cookieFile) {
-    args.push('--cookies', cookieFile)
-  }
+  const args: string[] = ['--concurrent-fragments', '4']
 
   if (ffmpegLocation) {
     args.push('--ffmpeg-location', ffmpegLocation)
