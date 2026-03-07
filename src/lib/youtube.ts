@@ -1,5 +1,6 @@
 import { youtubeDl } from 'youtube-dl-exec'
 import Innertube from 'youtubei.js'
+import { getInnertubeCookieString, getYtDlpCookieFile } from './cookies'
 
 type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
 type VideoQuality =
@@ -57,46 +58,15 @@ type YtDlpInfo = {
   automatic_captions?: Record<string, YtDlpSubtitleTrack[]>
 }
 
-const INNERTUBE_CLIENTS = ['WEB', 'IOS', 'MWEB'] as const
-
 async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
   try {
+    const cookie = getInnertubeCookieString()
     const yt = await Innertube.create({
       generate_session_locally: true,
       retrieve_player: false,
+      ...(cookie && { cookie }),
     })
-
-    // Try multiple clients — data center IPs may be blocked on some but not others
-    let info = null
-    for (const client of INNERTUBE_CLIENTS) {
-      try {
-        const result = await yt.getBasicInfo(videoId, { client })
-        const hasData =
-          result.basic_info.title &&
-          result.streaming_data?.adaptive_formats?.length
-        console.log(
-          `[yt-toolkit] innertube ${client}: title=${!!result.basic_info.title}, ` +
-          `duration=${result.basic_info.duration}, ` +
-          `formats=${result.streaming_data?.formats?.length ?? 0}, ` +
-          `adaptive=${result.streaming_data?.adaptive_formats?.length ?? 0}`,
-        )
-        if (hasData) {
-          info = result
-          break
-        }
-        // Keep partial result (title/duration) as fallback
-        if (!info && result.basic_info.title) {
-          info = result
-        }
-      } catch (e) {
-        console.warn(
-          `[yt-toolkit] innertube ${client} failed:`,
-          e instanceof Error ? e.message : e,
-        )
-      }
-    }
-
-    if (!info) return null
+    const info = await yt.getBasicInfo(videoId)
 
     const allFormats = [
       ...(info.streaming_data?.formats || []),
@@ -167,10 +137,12 @@ async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
 
 async function getYtDlpInfo(url: string): Promise<YtDlpInfo | null> {
   try {
+    const cookieFile = getYtDlpCookieFile()
     const result = await youtubeDl(url, {
       dumpSingleJson: true,
       noWarnings: true,
       noPlaylist: true,
+      ...(cookieFile && { cookies: cookieFile }),
     })
     return result as unknown as YtDlpInfo
   } catch (error) {
