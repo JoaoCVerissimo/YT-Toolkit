@@ -37,7 +37,12 @@ export function getYtDlpCookieFile(): string | null {
   if (filePath && existsSync(filePath)) return filePath
 
   const raw = process.env.YOUTUBE_COOKIES
-  if (!raw) return null
+  if (!raw) {
+    console.log(
+      `[yt-toolkit] no cookies found (YOUTUBE_COOKIES_FILE=${filePath || 'unset'}, YOUTUBE_COOKIES=${raw ? `${raw.length} chars` : 'unset'})`,
+    )
+    return null
+  }
 
   // Write raw content to a temp file once, reuse path
   if (cookieFilePath && existsSync(cookieFilePath)) return cookieFilePath
