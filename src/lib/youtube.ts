@@ -57,20 +57,46 @@ type YtDlpInfo = {
   automatic_captions?: Record<string, YtDlpSubtitleTrack[]>
 }
 
+const INNERTUBE_CLIENTS = ['WEB', 'IOS', 'MWEB'] as const
+
 async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
   try {
     const yt = await Innertube.create({
       generate_session_locally: true,
       retrieve_player: false,
     })
-    const info = await yt.getBasicInfo(videoId)
 
-    console.log(
-      `[yt-toolkit] innertube result: title=${!!info.basic_info.title}, ` +
-      `duration=${info.basic_info.duration}, ` +
-      `formats=${info.streaming_data?.formats?.length ?? 0}, ` +
-      `adaptive=${info.streaming_data?.adaptive_formats?.length ?? 0}`,
-    )
+    // Try multiple clients — data center IPs may be blocked on some but not others
+    let info = null
+    for (const client of INNERTUBE_CLIENTS) {
+      try {
+        const result = await yt.getBasicInfo(videoId, { client })
+        const hasData =
+          result.basic_info.title &&
+          result.streaming_data?.adaptive_formats?.length
+        console.log(
+          `[yt-toolkit] innertube ${client}: title=${!!result.basic_info.title}, ` +
+          `duration=${result.basic_info.duration}, ` +
+          `formats=${result.streaming_data?.formats?.length ?? 0}, ` +
+          `adaptive=${result.streaming_data?.adaptive_formats?.length ?? 0}`,
+        )
+        if (hasData) {
+          info = result
+          break
+        }
+        // Keep partial result (title/duration) as fallback
+        if (!info && result.basic_info.title) {
+          info = result
+        }
+      } catch (e) {
+        console.warn(
+          `[yt-toolkit] innertube ${client} failed:`,
+          e instanceof Error ? e.message : e,
+        )
+      }
+    }
+
+    if (!info) return null
 
     const allFormats = [
       ...(info.streaming_data?.formats || []),
@@ -419,13 +445,26 @@ export async function getVideoInfo(url: string): Promise<{
 
   // Try Innertube first (pure JS, ~200ms), fall back to yt-dlp (~7s)
   const innertubeResult = videoId ? await getInnertubeInfo(videoId) : null
-  const isUsable =
+  const hasFullData =
     innertubeResult &&
     innertubeResult.title &&
     innertubeResult.duration &&
     innertubeResult.formats &&
     innertubeResult.formats.length > 0
-  const info = isUsable ? innertubeResult : await getYtDlpInfo(cleanUrl)
+  const hasPartialData =
+    innertubeResult && innertubeResult.title && innertubeResult.duration
+
+  // Use Innertube if it has full or partial data; only fall back to yt-dlp
+  // if Innertube returned nothing useful (yt-dlp may also fail on data center IPs)
+  let info: YtDlpInfo | null
+  if (hasFullData) {
+    info = innertubeResult
+  } else if (hasPartialData) {
+    // Try yt-dlp for better format data, but accept Innertube partial if yt-dlp also fails
+    info = (await getYtDlpInfo(cleanUrl)) || innertubeResult
+  } else {
+    info = await getYtDlpInfo(cleanUrl)
+  }
 
   if (!info) {
     throw new Error('Could not retrieve video info.')
