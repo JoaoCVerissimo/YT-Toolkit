@@ -2,7 +2,7 @@
 
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/models'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type DownloadMode = 'fast' | 'follow'
 type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
@@ -121,10 +121,16 @@ interface VideoInfo {
   estimatedMp4Sizes: Record<VideoProfile, Record<VideoQuality, string>>
 }
 
+interface IdentifiedTrack {
+  title: string
+  artist: string
+  context?: string
+}
+
 interface SummaryData {
   summary: string
   keyPoints: string[]
-  transcript: string
+  transcript?: string
 }
 
 function getStoredValue(
@@ -357,13 +363,37 @@ export default function Home() {
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [toastExiting, setToastExiting] = useState(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toastKey = useRef(0)
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastKey.current += 1
+    setToastExiting(false)
+    setToast(msg)
+    toastTimer.current = setTimeout(() => {
+      setToastExiting(true)
+      setTimeout(() => {
+        setToast(null)
+        setToastExiting(false)
+      }, 200)
+    }, 2000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+    }
+  }, [])
   const [showTranscript, setShowTranscript] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [activeDownloadId, setActiveDownloadId] = useState<string | null>(null)
   const [activeDownloadFormat, setActiveDownloadFormat] = useState<
     'mp3' | 'mp4' | 'm4a' | 'webm' | null
   >(null)
+  const [musicTracks, setMusicTracks] = useState<IdentifiedTrack[] | null>(null)
 
   const {
     apiKey,
@@ -397,8 +427,9 @@ export default function Home() {
     if (areActionsDisabled) return
 
     setError(null)
-    setActionMessage(null)
+
     setSummaryData(null)
+    setMusicTracks(null)
     setVideoInfo(null)
     setLoading('info')
 
@@ -418,11 +449,40 @@ export default function Home() {
     }
   }
 
+  async function fetchMusic() {
+    if (areActionsDisabled) return
+
+    setError(null)
+
+    setLoading('music')
+
+    try {
+      const res = await fetch('/api/identify-music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          ...(apiKey && { apiKey }),
+          model,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMusicTracks(data.tracks)
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Failed to identify music',
+      )
+    } finally {
+      setLoading(null)
+    }
+  }
+
   async function fetchSummary() {
     if (areActionsDisabled) return
 
     setError(null)
-    setActionMessage(null)
+
     setLoading('summary')
 
     try {
@@ -465,14 +525,14 @@ export default function Home() {
     })
 
     doc.save(`${videoInfo?.title || 'youtube-summary'}.pdf`)
-    setActionMessage('PDF exported.')
+    showToast('PDF exported.')
   }
 
   async function copySummary() {
     if (!summaryData) return
 
     await navigator.clipboard.writeText(summaryData.summary)
-    setActionMessage('Summary copied to clipboard.')
+    showToast('Summary copied to clipboard.')
   }
 
   function downloadSummaryText() {
@@ -483,7 +543,7 @@ export default function Home() {
       summaryData.summary,
       'text/plain;charset=utf-8',
     )
-    setActionMessage('Summary downloaded as TXT.')
+    showToast('Summary downloaded as TXT.')
   }
 
   function exportResults(format: 'txt' | 'md') {
@@ -502,14 +562,14 @@ export default function Home() {
         ? 'text/plain;charset=utf-8'
         : 'text/markdown;charset=utf-8',
     )
-    setActionMessage(`Exported as ${format.toUpperCase()}.`)
+    showToast(`Exported as ${format.toUpperCase()}.`)
   }
 
   function download(format: 'mp3' | 'mp4' | 'm4a' | 'webm') {
     if (!videoInfo || isDownloading) return
 
     setError(null)
-    setActionMessage(null)
+
     const downloadId = crypto.randomUUID()
     const params = new URLSearchParams({
       url,
@@ -805,12 +865,6 @@ export default function Home() {
           </div>
         )}
 
-        {actionMessage && (
-          <div className="mb-6 rounded-lg bg-green-100 p-4 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-            {actionMessage}
-          </div>
-        )}
-
         {/* Video Info Card */}
         {videoInfo && (
           <div className="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
@@ -873,34 +927,132 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={fetchSummary}
-                    disabled={loading === 'summary' || areActionsDisabled}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {loading === 'summary' ? 'Summarizing...' : 'Summarize'}
-                  </button>
-                  <button
-                    onClick={() => download('mp4')}
-                    disabled={areActionsDisabled}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {activeDownloadFormat === 'mp4'
-                      ? 'Downloading MP4...'
-                      : 'Download MP4'}
-                  </button>
-                  <button
-                    onClick={() => download(audioFormat)}
-                    disabled={areActionsDisabled}
-                    className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {activeDownloadFormat &&
-                    activeDownloadFormat !== 'mp4'
-                      ? `Downloading ${activeDownloadFormat.toUpperCase()}...`
-                      : `Download ${audioFormat.toUpperCase()}`}
-                  </button>
-                </div>
+                <table className="border-separate border-spacing-y-1.5">
+                  <thead className="hidden sm:table-header-group">
+                    <tr>
+                      <th className="pb-1 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                        AI
+                      </th>
+                      <th className="pb-1 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                        Download
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="sm:hidden">
+                    <tr>
+                      <td className="pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">
+                        AI
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={fetchSummary}
+                            disabled={
+                              loading === 'summary' || areActionsDisabled
+                            }
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {loading === 'summary'
+                              ? 'Summarizing...'
+                              : 'Summarize'}
+                          </button>
+                          <button
+                            onClick={fetchMusic}
+                            disabled={
+                              loading === 'music' || areActionsDisabled
+                            }
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {loading === 'music'
+                              ? 'Identifying...'
+                              : 'Identify Music'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">
+                        Download
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => download('mp4')}
+                            disabled={areActionsDisabled}
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {activeDownloadFormat === 'mp4'
+                              ? 'Downloading MP4...'
+                              : 'Download MP4'}
+                          </button>
+                          <button
+                            onClick={() => download(audioFormat)}
+                            disabled={areActionsDisabled}
+                            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {activeDownloadFormat &&
+                            activeDownloadFormat !== 'mp4'
+                              ? `Downloading ${activeDownloadFormat.toUpperCase()}...`
+                              : `Download ${audioFormat.toUpperCase()}`}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tbody className="hidden sm:table-row-group">
+                    <tr>
+                      <td className="pr-4 align-top">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={fetchSummary}
+                            disabled={
+                              loading === 'summary' || areActionsDisabled
+                            }
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {loading === 'summary'
+                              ? 'Summarizing...'
+                              : 'Summarize'}
+                          </button>
+                          <button
+                            onClick={fetchMusic}
+                            disabled={
+                              loading === 'music' || areActionsDisabled
+                            }
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {loading === 'music'
+                              ? 'Identifying...'
+                              : 'Identify Music'}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="align-top">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => download('mp4')}
+                            disabled={areActionsDisabled}
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {activeDownloadFormat === 'mp4'
+                              ? 'Downloading MP4...'
+                              : 'Download MP4'}
+                          </button>
+                          <button
+                            onClick={() => download(audioFormat)}
+                            disabled={areActionsDisabled}
+                            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {activeDownloadFormat &&
+                            activeDownloadFormat !== 'mp4'
+                              ? `Downloading ${activeDownloadFormat.toUpperCase()}...`
+                              : `Download ${audioFormat.toUpperCase()}`}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
                 {isDownloading && (
                   <p className="mt-3 text-sm text-gray-500">
                     {activeDownloadFormat?.toUpperCase()} download in
@@ -909,6 +1061,53 @@ export default function Home() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Music Identification Results */}
+        {musicTracks !== null && (
+          <div className="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+            <h3 className="mb-3 text-lg font-semibold">Music Identified</h3>
+            {musicTracks.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No music could be identified in this video.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {musicTracks.map((track, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {track.title}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {track.artist}
+                      </p>
+                      {track.context && (
+                        <p className="mt-1 text-xs text-gray-400">
+                          {track.context}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(
+                          `${track.title} - ${track.artist}`,
+                        )
+                        showToast('Copied to clipboard.')
+                      }}
+                      className="shrink-0 rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                      title="Copy song name"
+                    >
+                      Copy
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
@@ -973,22 +1172,35 @@ export default function Home() {
               </div>
             )}
 
-            <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-              <button
-                onClick={() => setShowTranscript(!showTranscript)}
-                className="mb-2 text-lg font-semibold transition-colors hover:text-blue-500"
-              >
-                {showTranscript ? 'Hide' : 'Show'} Full Transcript
-              </button>
-              {showTranscript && (
-                <p className="mt-2 max-h-96 overflow-y-auto text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                  {summaryData.transcript}
-                </p>
-              )}
-            </div>
+            {summaryData.transcript && (
+              <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                <button
+                  onClick={() => setShowTranscript(!showTranscript)}
+                  className="mb-2 text-lg font-semibold transition-colors hover:text-blue-500"
+                >
+                  {showTranscript ? 'Hide' : 'Show'} Full Transcript
+                </button>
+                {showTranscript && (
+                  <p className="mt-2 max-h-96 overflow-y-auto text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                    {summaryData.transcript}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {toast && (
+        <div className="pointer-events-none fixed right-6 top-6 z-50">
+          <div
+            key={toastKey.current}
+            className={`pointer-events-auto rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-gray-100 dark:text-gray-900 ${toastExiting ? 'toast-exit' : 'toast-enter'}`}
+          >
+            {toast}
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -429,6 +429,7 @@ export async function GET(req: NextRequest) {
 
         const ytdlpChild = spawn(ytdlp, ytdlpArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
+          cwd: getTmpDir(),
         })
 
         registerDownloadProcess(downloadId, ytdlpChild)
@@ -518,11 +519,14 @@ export async function GET(req: NextRequest) {
       ffmpegArgs.push('pipe:1')
 
       // Spawn pipeline: yt-dlp stdout → ffmpeg stdin → ffmpeg stdout → response
+      const tmpDir = getTmpDir()
       const ytdlpChild = spawn(ytdlp, ytdlpArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: tmpDir,
       })
       const ffmpegChild = spawn(ffmpegBin, ffmpegArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: tmpDir,
       })
 
       ytdlpChild.stdout.pipe(ffmpegChild.stdin)
@@ -592,6 +596,7 @@ export async function GET(req: NextRequest) {
     )
     const child = spawn(ytdlp, args, {
       stdio: ['ignore', 'ignore', 'pipe'],
+      cwd: tmpDir,
     })
     registerDownloadProcess(downloadId, child)
     setDownloadJob(downloadId, 'downloading')

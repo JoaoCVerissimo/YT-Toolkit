@@ -38,9 +38,55 @@ ${text}`,
   })
 
   const raw = response.text?.trim() || ''
+  return parseSummaryResponse(raw)
+}
 
+export async function summarizeFromVideo(
+  youtubeUrl: string,
+  options?: { apiKey?: string; model?: string },
+): Promise<{ summary: string; keyPoints: string[] }> {
+  const apiKey = options?.apiKey || process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error('No Gemini API key configured. Add your key in Settings.')
+  }
+
+  const model = options?.model || DEFAULT_MODEL
+  const ai = new GoogleGenAI({ apiKey })
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            fileData: {
+              fileUri: youtubeUrl,
+              mimeType: 'video/mp4',
+            },
+          },
+          {
+            text: `You are a video content summarizer. Analyze this YouTube video and provide:
+1. A clear, concise summary (2-3 paragraphs)
+2. 5-7 key points as bullet points
+
+Respond in this exact JSON format, no markdown fences:
+{"summary": "...", "keyPoints": ["point 1", "point 2", ...]}`,
+          },
+        ],
+      },
+    ],
+  })
+
+  const raw = response.text?.trim() || ''
+  return parseSummaryResponse(raw)
+}
+
+function parseSummaryResponse(raw: string): {
+  summary: string
+  keyPoints: string[]
+} {
   try {
-    // Strip markdown code fences if present
     const cleaned = raw.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
     const parsed = JSON.parse(cleaned)
     return {
@@ -48,7 +94,6 @@ ${text}`,
       keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
     }
   } catch {
-    // If JSON parsing fails, return the raw text as the summary
     return { summary: raw, keyPoints: [] }
   }
 }

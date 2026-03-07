@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cleanVideoUrl, extractVideoId, getTranscript } from '@/lib/youtube'
-import { summarize, summarizeFromVideo } from '@/lib/summarizer'
+import { cleanVideoUrl, extractVideoId } from '@/lib/youtube'
+import { identifyMusic } from '@/lib/music-identifier'
 import {
   parseBodyApiKey,
   parseBodyModel,
@@ -29,27 +29,22 @@ export async function POST(req: NextRequest) {
 
     const apiKey = parseBodyApiKey(body)
     const model = parseBodyModel(body)
-    const opts = { ...(apiKey && { apiKey }), model }
+    const cleanUrl = cleanVideoUrl(url)
 
-    let transcript: string | null = null
-    try {
-      transcript = await getTranscript(videoId)
-    } catch {
-      // No transcript available — will fall back to direct video analysis
-    }
-
-    const { summary, keyPoints } = transcript
-      ? await summarize(transcript, opts)
-      : await summarizeFromVideo(cleanVideoUrl(url), opts)
-
-    return NextResponse.json({
-      summary,
-      keyPoints,
-      ...(transcript && { transcript }),
+    const tracks = await identifyMusic(cleanUrl, {
+      ...(apiKey && { apiKey }),
+      model,
     })
+
+    return NextResponse.json({ tracks })
   } catch (error) {
     return NextResponse.json(
-      { error: safeErrorMessage(error, 'Failed to summarize video.') },
+      {
+        error: safeErrorMessage(
+          error,
+          'Failed to identify music in this video.',
+        ),
+      },
       { status: 500 },
     )
   }
