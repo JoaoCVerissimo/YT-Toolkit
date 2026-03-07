@@ -61,12 +61,14 @@ type YtDlpInfo = {
 async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
   try {
     const cookie = getInnertubeCookieString()
+    console.log(`[yt-toolkit] innertube: cookies ${cookie ? `${cookie.length} chars` : 'none'}`)
     const yt = await Innertube.create({
       generate_session_locally: true,
       retrieve_player: false,
       ...(cookie && { cookie }),
     })
     const info = await yt.getBasicInfo(videoId)
+    console.log(`[yt-toolkit] innertube: title=${!!info.basic_info.title}, duration=${info.basic_info.duration}, formats=${(info.streaming_data?.formats?.length || 0) + (info.streaming_data?.adaptive_formats?.length || 0)}`)
 
     const allFormats = [
       ...(info.streaming_data?.formats || []),
@@ -143,7 +145,8 @@ async function getYtDlpInfo(url: string): Promise<YtDlpInfo | null> {
       noWarnings: true,
       noPlaylist: true,
       ...(cookieFile && { cookies: cookieFile }),
-    })
+      extractorArgs: 'youtube:player_client=web_creator,mweb',
+    } as Record<string, unknown>)
     return result as unknown as YtDlpInfo
   } catch (error) {
     console.error(

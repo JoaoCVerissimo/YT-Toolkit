@@ -275,7 +275,10 @@ function buildYtDlpArgs(
   videoQuality: VideoQuality,
   videoProfile: VideoProfile,
 ) {
-  const args: string[] = ['--concurrent-fragments', '4']
+  const args: string[] = [
+    '--concurrent-fragments', '4',
+    '--extractor-args', 'youtube:player_client=web_creator,mweb',
+  ]
 
   const cookieFile = getYtDlpCookieFile()
   if (cookieFile) {
