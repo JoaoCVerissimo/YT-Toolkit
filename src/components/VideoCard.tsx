@@ -1,11 +1,9 @@
 import {
   getAudioQualityLabel,
-  getBrowserModeLabel,
   getVideoProfileLabel,
   getVideoQualityLabel,
   type AudioFormat,
   type AudioQuality,
-  type DownloadMode,
   type VideoInfo,
   type VideoProfile,
   type VideoQuality,
@@ -14,7 +12,6 @@ import Image from 'next/image'
 
 interface VideoCardProps {
   videoInfo: VideoInfo
-  downloadMode: DownloadMode
   audioFormat: AudioFormat
   audioQuality: AudioQuality
   videoQuality: VideoQuality
@@ -32,7 +29,6 @@ interface VideoCardProps {
 
 export function VideoCard({
   videoInfo,
-  downloadMode,
   audioFormat,
   audioQuality,
   videoQuality,
@@ -65,10 +61,6 @@ export function VideoCard({
           <p className="mb-4 text-sm text-gray-500">
             Highest source quality: {videoInfo.highestQuality}
           </p>
-          <p className="mb-4 text-sm text-gray-500">
-            Browser behavior: {getBrowserModeLabel(downloadMode)}
-          </p>
-
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
               <h3 className="mb-2 text-sm font-semibold">MP4 video</h3>

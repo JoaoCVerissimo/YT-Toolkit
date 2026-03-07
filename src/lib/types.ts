@@ -1,4 +1,3 @@
-export type DownloadMode = 'fast' | 'follow'
 export type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
 export type VideoQuality =
   | '144'
@@ -129,6 +128,3 @@ export function getVideoProfileLabel(value: VideoProfile): string {
   )
 }
 
-export function getBrowserModeLabel(value: DownloadMode): string {
-  return value === 'follow' ? 'Browser follow (streaming)' : 'Fastest delivery'
-}

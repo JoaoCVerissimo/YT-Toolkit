@@ -7,7 +7,6 @@ import {
   VIDEO_QUALITY_OPTIONS,
   type AudioFormat,
   type AudioQuality,
-  type DownloadMode,
   type VideoProfile,
   type VideoQuality,
 } from '@/lib/types'
@@ -15,7 +14,6 @@ import {
 interface SettingsPanelProps {
   apiKey: string
   model: string
-  downloadMode: DownloadMode
   audioQuality: AudioQuality
   videoQuality: VideoQuality
   videoProfile: VideoProfile
@@ -23,7 +21,6 @@ interface SettingsPanelProps {
   theme: Theme
   saveApiKey: (key: string) => void
   saveModel: (model: string) => void
-  saveDownloadMode: (mode: DownloadMode) => void
   saveAudioQuality: (quality: AudioQuality) => void
   saveVideoQuality: (quality: VideoQuality) => void
   saveVideoProfile: (profile: VideoProfile) => void
@@ -34,7 +31,6 @@ interface SettingsPanelProps {
 export function SettingsPanel({
   apiKey,
   model,
-  downloadMode,
   audioQuality,
   videoQuality,
   videoProfile,
@@ -42,7 +38,6 @@ export function SettingsPanel({
   theme,
   saveApiKey,
   saveModel,
-  saveDownloadMode,
   saveAudioQuality,
   saveVideoQuality,
   saveVideoProfile,
@@ -111,26 +106,6 @@ export function SettingsPanel({
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Browser download behavior
-              </label>
-              <select
-                value={downloadMode}
-                onChange={(e) =>
-                  saveDownloadMode(e.target.value as DownloadMode)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800"
-              >
-                <option value="fast">Fastest delivery</option>
-                <option value="follow">Show in browser immediately</option>
-              </select>
-              <p className="mt-1 text-xs text-gray-500">
-                {downloadMode === 'fast'
-                  ? 'The file is fully prepared on the server before delivery. Faster overall but the browser download bar only appears once ready.'
-                  : 'The file streams to the browser as it is generated. The download bar appears immediately but delivery is significantly slower.'}
-              </p>
             </div>
           </div>
         </div>

@@ -22,6 +22,7 @@ export default function Home() {
   const [activeDownloadFormat, setActiveDownloadFormat] = useState<
     'mp3' | 'mp4' | 'm4a' | 'webm' | null
   >(null)
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
   const [musicTracks, setMusicTracks] = useState<IdentifiedTrack[] | null>(null)
 
   const { toast, toastExiting, toastKey, showToast } = useToast()
@@ -136,7 +137,6 @@ export default function Home() {
     const params = new URLSearchParams({
       url,
       format,
-      downloadMode: settings.downloadMode,
       downloadId,
       audioQuality: settings.audioQuality,
       videoQuality: settings.videoQuality,
@@ -154,13 +154,14 @@ export default function Home() {
 
     setActiveDownloadId(downloadId)
     setActiveDownloadFormat(format)
+    setDownloadProgress(null)
     void pollDownloadStatus(downloadId)
   }
 
   async function pollDownloadStatus(downloadId: string) {
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const MAX_POLLS = 600 // ~10 min at 1s intervals
+    const MAX_POLLS = 1200 // ~10 min at 500ms intervals
 
     for (let i = 0; i < MAX_POLLS; i++) {
       try {
@@ -169,6 +170,10 @@ export default function Home() {
           { cache: 'no-store' },
         )
         const data = await res.json()
+
+        if (data.progress != null) {
+          setDownloadProgress(data.progress)
+        }
 
         if (data.state === 'failed') {
           setError(data.error || 'Download failed')
@@ -181,11 +186,12 @@ export default function Home() {
         break
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
 
     setActiveDownloadId(null)
     setActiveDownloadFormat(null)
+    setDownloadProgress(null)
   }
 
   return (
@@ -250,7 +256,6 @@ export default function Home() {
         {videoInfo && (
           <VideoCard
             videoInfo={videoInfo}
-            downloadMode={settings.downloadMode}
             audioFormat={settings.audioFormat}
             audioQuality={settings.audioQuality}
             videoQuality={settings.videoQuality}
@@ -306,7 +311,8 @@ export default function Home() {
       {isDownloading && (
         <LoadingOverlay
           title={`Downloading ${activeDownloadFormat?.toUpperCase()}...`}
-          subtitle="Preparing your file"
+          subtitle={downloadProgress != null ? `${Math.round(downloadProgress)}% complete` : 'Preparing your file'}
+          progress={downloadProgress}
         />
       )}
     </main>

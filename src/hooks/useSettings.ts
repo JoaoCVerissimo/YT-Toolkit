@@ -5,7 +5,6 @@ import {
   VIDEO_QUALITY_OPTIONS,
   type AudioFormat,
   type AudioQuality,
-  type DownloadMode,
   type VideoProfile,
   type VideoQuality,
 } from '@/lib/types'
@@ -22,12 +21,6 @@ function getStoredValue(
 
   const store = storage === 'session' ? sessionStorage : localStorage
   return store.getItem(key) || fallback
-}
-
-function getStoredDownloadMode(): DownloadMode {
-  if (typeof window === 'undefined') return 'fast'
-  const saved = localStorage.getItem('download_mode')
-  return saved === 'follow' ? 'follow' : 'fast'
 }
 
 function getStoredAudioQuality(): AudioQuality {
@@ -79,9 +72,6 @@ export function useSettings() {
   const [model, setModel] = useState(() =>
     getStoredValue('gemini_model', DEFAULT_MODEL),
   )
-  const [downloadMode, setDownloadMode] = useState<DownloadMode>(() =>
-    getStoredDownloadMode(),
-  )
   const [audioQuality, setAudioQuality] = useState<AudioQuality>(() =>
     getStoredAudioQuality(),
   )
@@ -108,11 +98,6 @@ export function useSettings() {
   function saveModel(m: string) {
     setModel(m)
     localStorage.setItem('gemini_model', m)
-  }
-
-  function saveDownloadMode(mode: DownloadMode) {
-    setDownloadMode(mode)
-    localStorage.setItem('download_mode', mode)
   }
 
   function saveAudioQuality(quality: AudioQuality) {
@@ -160,14 +145,12 @@ export function useSettings() {
   return {
     apiKey,
     model,
-    downloadMode,
     audioQuality,
     videoQuality,
     videoProfile,
     audioFormat,
     saveApiKey,
     saveModel,
-    saveDownloadMode,
     saveAudioQuality,
     saveVideoQuality,
     saveVideoProfile,

@@ -4,7 +4,6 @@ import {
   executeDownload,
   getDownloadStatus,
   parseAudioQuality,
-  parseDownloadMode,
   parseVideoProfile,
   parseVideoQuality,
   sanitizeFilename,
@@ -80,7 +79,6 @@ export async function GET(req: NextRequest) {
     return await executeDownload({
       cleanUrl: cleanVideoUrl(url),
       format: format as 'mp3' | 'mp4' | 'm4a' | 'webm',
-      downloadMode: parseDownloadMode(params.get('downloadMode')),
       downloadId,
       safeTitle: sanitizeFilename(params.get('title'), `youtube-${videoId}`),
       audioQuality: parseAudioQuality(params.get('audioQuality')),

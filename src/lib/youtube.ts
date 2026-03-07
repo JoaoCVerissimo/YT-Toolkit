@@ -59,8 +59,18 @@ type YtDlpInfo = {
 
 async function getInnertubeInfo(videoId: string): Promise<YtDlpInfo | null> {
   try {
-    const yt = await Innertube.create()
+    const yt = await Innertube.create({
+      generate_session_locally: true,
+      retrieve_player: false,
+    })
     const info = await yt.getBasicInfo(videoId)
+
+    console.log(
+      `[yt-toolkit] innertube result: title=${!!info.basic_info.title}, ` +
+      `duration=${info.basic_info.duration}, ` +
+      `formats=${info.streaming_data?.formats?.length ?? 0}, ` +
+      `adaptive=${info.streaming_data?.adaptive_formats?.length ?? 0}`,
+    )
 
     const allFormats = [
       ...(info.streaming_data?.formats || []),
@@ -408,9 +418,14 @@ export async function getVideoInfo(url: string): Promise<{
   const videoId = extractVideoId(cleanUrl)
 
   // Try Innertube first (pure JS, ~200ms), fall back to yt-dlp (~7s)
-  const info =
-    (videoId ? await getInnertubeInfo(videoId) : null) ||
-    (await getYtDlpInfo(cleanUrl))
+  const innertubeResult = videoId ? await getInnertubeInfo(videoId) : null
+  const isUsable =
+    innertubeResult &&
+    innertubeResult.title &&
+    innertubeResult.duration &&
+    innertubeResult.formats &&
+    innertubeResult.formats.length > 0
+  const info = isUsable ? innertubeResult : await getYtDlpInfo(cleanUrl)
 
   if (!info) {
     throw new Error('Could not retrieve video info.')

@@ -1,12 +1,13 @@
 import { ChildProcess, spawn } from 'child_process'
 import {
+  createReadStream,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   statSync,
   unlinkSync,
 } from 'fs'
+import { stat } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { Readable } from 'stream'
@@ -16,7 +17,6 @@ import { Readable } from 'stream'
 // ---------------------------------------------------------------------------
 
 type DownloadFormat = 'mp3' | 'mp4' | 'm4a' | 'webm'
-type DownloadMode = 'fast' | 'follow'
 type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
 type VideoQuality =
   | '144'
@@ -34,13 +34,13 @@ type DownloadState = 'pending' | 'downloading' | 'completed' | 'failed'
 type DownloadJob = {
   state: DownloadState
   error?: string
+  progress?: number
   updatedAt: number
 }
 
 export interface DownloadParams {
   cleanUrl: string
   format: DownloadFormat
-  downloadMode: DownloadMode
   downloadId: string
   safeTitle: string
   audioQuality: AudioQuality
@@ -176,13 +176,18 @@ export function cancelDownload(downloadId: string): boolean {
 export function getDownloadStatus(downloadId: string): {
   state: string
   error?: string
+  progress?: number
 } {
   const job = downloadJobs.get(downloadId)
   if (!job || Date.now() - job.updatedAt > DOWNLOAD_JOB_TTL_MS) {
     if (job) downloadJobs.delete(downloadId)
     return { state: 'completed' }
   }
-  return { state: job.state, ...(job.error && { error: job.error }) }
+  return {
+    state: job.state,
+    ...(job.error && { error: job.error }),
+    ...(job.progress != null && { progress: job.progress }),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -210,17 +215,6 @@ function getFfmpegLocation(): string {
   )
   if (existsSync(candidate)) return dirname(candidate)
   return ''
-}
-
-function getFfmpegPath(): string {
-  const candidate = join(
-    process.cwd(),
-    'node_modules',
-    'ffmpeg-static',
-    'ffmpeg',
-  )
-  if (existsSync(candidate)) return candidate
-  return 'ffmpeg'
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +274,7 @@ function buildYtDlpArgs(
   videoQuality: VideoQuality,
   videoProfile: VideoProfile,
 ) {
-  const args: string[] = []
+  const args: string[] = ['--concurrent-fragments', '4']
 
   if (ffmpegLocation) {
     args.push('--ffmpeg-location', ffmpegLocation)
@@ -328,10 +322,6 @@ const CONTENT_TYPES: Record<DownloadFormat, string> = {
 // Parsing helpers
 // ---------------------------------------------------------------------------
 
-export function parseDownloadMode(value: string | null): DownloadMode {
-  return value === 'follow' ? 'follow' : 'fast'
-}
-
 export function parseAudioQuality(value: string | null): AudioQuality {
   const allowed: AudioQuality[] = ['64k', '128k', '192k', '256k', '320k']
   return allowed.includes(value as AudioQuality)
@@ -376,183 +366,6 @@ export function sanitizeFilename(
 // Download execution
 // ---------------------------------------------------------------------------
 
-function downloadFollowDirect(params: DownloadParams): Response {
-  const { cleanUrl, format, downloadId, safeTitle, signal } = params
-  const ytdlp = getYtDlpPath()
-  const ffmpegLocation = getFfmpegLocation()
-
-  const ytdlpArgs: string[] = ['--no-playlist']
-  if (ffmpegLocation) {
-    ytdlpArgs.push('--ffmpeg-location', ffmpegLocation)
-  }
-  ytdlpArgs.push(
-    '-f',
-    `bestaudio[ext=${format}]/bestaudio`,
-    '-o',
-    '-',
-    cleanUrl,
-  )
-
-  const ytdlpChild = spawn(ytdlp, ytdlpArgs, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    cwd: getTmpDir(),
-  })
-
-  registerDownloadProcess(downloadId, ytdlpChild)
-  setDownloadJob(downloadId, 'downloading')
-
-  let stderr = ''
-  ytdlpChild.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString()
-    if (stderr.length > 4000) stderr = stderr.slice(-4000)
-  })
-
-  ytdlpChild.once('close', (code) => {
-    if (code !== 0) {
-      console.error(`[yt-toolkit] download failed (${downloadId}):`, stderr)
-      finalizeDownloadJob(downloadId, 'failed', 'Download failed.')
-    } else {
-      finalizeDownloadJob(downloadId, 'completed')
-    }
-  })
-
-  ytdlpChild.once('error', () => {})
-
-  signal.addEventListener('abort', () => {
-    finalizeDownloadJob(downloadId, 'failed', 'Download cancelled')
-    ytdlpChild.kill('SIGTERM')
-  })
-
-  const webStream = Readable.toWeb(ytdlpChild.stdout) as ReadableStream
-
-  return new Response(webStream, {
-    headers: {
-      'Content-Type': CONTENT_TYPES[format],
-      'Content-Disposition': `attachment; filename="${safeTitle}.${format}"`,
-      'Cache-Control': 'no-store',
-      'X-Accel-Buffering': 'no',
-    },
-  })
-}
-
-function downloadFollowPipeline(params: DownloadParams): Response {
-  const {
-    cleanUrl,
-    format,
-    downloadId,
-    safeTitle,
-    audioQuality,
-    videoQuality,
-    videoProfile,
-    signal,
-  } = params
-  const ytdlp = getYtDlpPath()
-  const ffmpegLocation = getFfmpegLocation()
-  const ffmpegBin = getFfmpegPath()
-  const tmpDir = getTmpDir()
-
-  const ytdlpArgs: string[] = ['--no-playlist']
-  if (ffmpegLocation) {
-    ytdlpArgs.push('--ffmpeg-location', ffmpegLocation)
-  }
-  if (format === 'mp3') {
-    ytdlpArgs.push('-f', 'bestaudio', '-o', '-', cleanUrl)
-  } else {
-    ytdlpArgs.push(
-      '-f',
-      getVideoFormatSelector(videoQuality, videoProfile),
-      '--merge-output-format',
-      'mkv',
-      '-o',
-      '-',
-      cleanUrl,
-    )
-  }
-
-  const ffmpegArgs = [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-probesize',
-    '32768',
-    '-analyzeduration',
-    '0',
-    '-i',
-    'pipe:0',
-  ]
-  if (format === 'mp3') {
-    ffmpegArgs.push('-vn', '-f', 'mp3', '-b:a', audioQuality)
-  } else {
-    ffmpegArgs.push(
-      '-c',
-      'copy',
-      '-movflags',
-      'frag_keyframe+empty_moov+default_base_moof',
-      '-f',
-      'mp4',
-    )
-  }
-  ffmpegArgs.push('pipe:1')
-
-  const ytdlpChild = spawn(ytdlp, ytdlpArgs, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    cwd: tmpDir,
-  })
-  const ffmpegChild = spawn(ffmpegBin, ffmpegArgs, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: tmpDir,
-  })
-
-  ytdlpChild.stdout.pipe(ffmpegChild.stdin)
-  ffmpegChild.stdin.on('error', () => {})
-
-  registerDownloadProcess(downloadId, ytdlpChild)
-  setDownloadJob(downloadId, 'downloading')
-
-  let stderr = ''
-  ytdlpChild.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString()
-    if (stderr.length > 4000) stderr = stderr.slice(-4000)
-  })
-  ffmpegChild.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString()
-    if (stderr.length > 8000) stderr = stderr.slice(-8000)
-  })
-
-  const cleanup = () => {
-    ytdlpChild.kill('SIGTERM')
-    ffmpegChild.kill('SIGTERM')
-  }
-
-  ffmpegChild.once('close', (code) => {
-    if (code !== 0) {
-      console.error(`[yt-toolkit] conversion failed (${downloadId}):`, stderr)
-      finalizeDownloadJob(downloadId, 'failed', 'Download failed.')
-    } else {
-      finalizeDownloadJob(downloadId, 'completed')
-    }
-  })
-
-  ytdlpChild.once('error', () => cleanup())
-  ffmpegChild.once('error', () => cleanup())
-
-  signal.addEventListener('abort', () => {
-    finalizeDownloadJob(downloadId, 'failed', 'Download cancelled')
-    cleanup()
-  })
-
-  const webStream = Readable.toWeb(ffmpegChild.stdout) as ReadableStream
-
-  return new Response(webStream, {
-    headers: {
-      'Content-Type': CONTENT_TYPES[format],
-      'Content-Disposition': `attachment; filename="${safeTitle}.${format}"`,
-      'Cache-Control': 'no-store',
-      'X-Accel-Buffering': 'no',
-    },
-  })
-}
-
 async function downloadToFile(params: DownloadParams): Promise<Response> {
   const {
     cleanUrl,
@@ -582,11 +395,24 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
     videoProfile,
   )
   const child = spawn(ytdlp, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
     cwd: tmpDir,
   })
   registerDownloadProcess(downloadId, child)
   setDownloadJob(downloadId, 'downloading')
+
+  // yt-dlp writes progress to stdout; parse percentage from it
+  child.stdout.on('data', (chunk: Buffer) => {
+    const text = chunk.toString()
+    const match = text.match(/(\d+(?:\.\d+)?)%/)
+    if (match) {
+      const job = downloadJobs.get(downloadId)
+      if (job && job.state === 'downloading') {
+        job.progress = parseFloat(match[1])
+        job.updatedAt = Date.now()
+      }
+    }
+  })
 
   let stderr = ''
   child.stderr.on('data', (chunk: Buffer) => {
@@ -622,16 +448,20 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
     })
   })
 
-  const data = readFileSync(actualFile)
+  const fileInfo = await stat(actualFile)
   finalizeDownloadJob(downloadId, 'completed')
-  cleanUp(actualFile)
 
-  return new Response(new Uint8Array(data), {
+  const fileStream = createReadStream(actualFile)
+  fileStream.once('close', () => cleanUp(actualFile))
+
+  const webStream = Readable.toWeb(fileStream) as ReadableStream
+
+  return new Response(webStream, {
     headers: {
       'Content-Type': CONTENT_TYPES[format],
       'Content-Disposition': `attachment; filename="${safeTitle}.${format}"`,
       'Cache-Control': 'no-store',
-      'Content-Length': String(data.byteLength),
+      'Content-Length': String(fileInfo.size),
     },
   })
 }
@@ -642,15 +472,6 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
 
 export function executeDownload(
   params: DownloadParams,
-): Response | Promise<Response> {
-  const { format, downloadMode } = params
-
-  if (downloadMode === 'follow') {
-    if (format === 'm4a' || format === 'webm') {
-      return downloadFollowDirect(params)
-    }
-    return downloadFollowPipeline(params)
-  }
-
+): Promise<Response> {
   return downloadToFile(params)
 }
