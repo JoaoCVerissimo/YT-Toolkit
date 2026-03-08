@@ -55,13 +55,19 @@ async function getYtDlpInfo(url: string): Promise<YtDlpInfo | null> {
     ])
 
     let stdout = ''
+    let stderr = ''
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
     })
 
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
     child.once('close', (code) => {
       if (code !== 0) {
+        console.error('[yt-toolkit] yt-dlp info failed (exit', code + '):', stderr.slice(-500))
         resolve(null)
         return
       }
@@ -73,7 +79,8 @@ async function getYtDlpInfo(url: string): Promise<YtDlpInfo | null> {
       }
     })
 
-    child.once('error', () => {
+    child.once('error', (err) => {
+      console.error('[yt-toolkit] yt-dlp spawn error:', err.message)
       resolve(null)
     })
   })
@@ -139,8 +146,11 @@ export async function getVideoInfo(url: string): Promise<{
     }
     ytdlDetails = info.videoDetails
     ytdlFormats = getAvailableFormats(info)
-  } catch {
-    // ytdl-core unavailable — rely on yt-dlp
+  } catch (error) {
+    console.error(
+      '[yt-toolkit] ytdl-core failed:',
+      error instanceof Error ? error.message : error,
+    )
   }
 
   if (!ytDlpInfo && !ytdlDetails) {
