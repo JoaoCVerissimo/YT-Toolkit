@@ -1,17 +1,6 @@
 type AudioQuality = '64k' | '128k' | '192k' | '256k' | '320k'
-type VideoQuality =
-  | '144'
-  | '240'
-  | '360'
-  | '480'
-  | '720'
-  | '1080'
-  | '1440'
-  | '2160'
-  | 'best'
-type VideoProfile = 'compatible' | 'best'
 
-export type { AudioQuality, VideoQuality, VideoProfile }
+export type { AudioQuality }
 
 export const AUDIO_QUALITIES: AudioQuality[] = [
   '64k',
@@ -19,17 +8,6 @@ export const AUDIO_QUALITIES: AudioQuality[] = [
   '192k',
   '256k',
   '320k',
-]
-export const VIDEO_QUALITIES: VideoQuality[] = [
-  '144',
-  '240',
-  '360',
-  '480',
-  '720',
-  '1080',
-  '1440',
-  '2160',
-  'best',
 ]
 
 // ---------------------------------------------------------------------------

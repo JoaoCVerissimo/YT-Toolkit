@@ -2,12 +2,14 @@
 
 A self-hosted web app to download, summarize, and analyze YouTube videos. Built with Next.js, powered by yt-dlp and Google Gemini.
 
+> **Note:** YouTube actively blocks requests from data center IPs. Downloads, transcripts, and AI features that depend on yt-dlp **only work when running locally** (residential IP). The video info endpoint works everywhere thanks to the YouTube Data API / oEmbed fallback. See [Hosting Limitations](#hosting-limitations) for details.
+
 ## Features
 
 ### Video information
 
-- Fetches video metadata (title, duration, thumbnail, available qualities)
-- Estimates download sizes for each quality and format combination
+- Fetches video metadata (title, duration, thumbnail) via YouTube Data API v3 or oEmbed
+- Estimates MP3 download sizes based on duration and bitrate
 
 ### AI-powered tools (via Google Gemini)
 
@@ -79,7 +81,42 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 > `yt-dlp` is installed via pip at build time since `youtube-dl-exec` requires the system binary.
 
-No environment variables are required — users provide their own Gemini API key through the app's settings.
+### Environment variables
+
+| Variable          | Required | Description                                                                                |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `YOUTUBE_API_KEY` | No       | YouTube Data API v3 key. Enables duration data in video info. Free tier: 10,000 units/day. |
+
+Users provide their own Gemini API key through the app's settings UI — no server-side key is needed.
+
+#### Getting a YouTube API key
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select an existing one)
+3. Enable the **YouTube Data API v3** from the API Library
+4. Go to **Credentials** and create an **API key**
+5. Set the key as `YOUTUBE_API_KEY` in your environment (`.env.local` for local dev, or in your hosting provider's settings)
+
+Without this key the app still works — it falls back to oEmbed, which returns title and thumbnail but no duration.
+
+## Hosting Limitations
+
+YouTube aggressively blocks requests from data center IP ranges (AWS, GCP, Render, Railway, Fly.io, etc.). This affects any tool that connects directly to YouTube to stream or download content.
+
+| Feature              | Local (residential IP) | Data center hosting                |
+| -------------------- | ---------------------- | ---------------------------------- |
+| Video info           | Works                  | Works (YouTube Data API / oEmbed)  |
+| MP3/MP4 downloads    | Works                  | Blocked by YouTube                 |
+| Transcripts          | Works                  | Blocked by YouTube                 |
+| AI summarization     | Works                  | Blocked (needs transcript)         |
+| Music identification | Works                  | Blocked (needs video access)       |
+
+**Why?** Downloads and transcripts rely on yt-dlp, which must fetch content directly from YouTube. YouTube detects and blocks these requests from known data center IP ranges, regardless of cookies or authentication.
+
+**Workarounds** (not implemented):
+
+- Use a residential proxy service (adds cost and complexity)
+- Self-host on a residential connection (e.g. home server, Raspberry Pi)
 
 ## Tech Stack
 

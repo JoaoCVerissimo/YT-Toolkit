@@ -1,10 +1,7 @@
 import {
   AUDIO_QUALITIES,
-  VIDEO_QUALITIES,
   estimateAudioSize,
   type AudioQuality,
-  type VideoProfile,
-  type VideoQuality,
 } from './formats'
 
 export { getTranscript } from './transcript'
@@ -150,11 +147,8 @@ export async function getVideoInfo(url: string): Promise<{
   duration: string
   durationSeconds: number
   thumbnail: string
-  highestQuality: string
   estimatedMp3Size: string
-  estimatedMp4Size: string
   estimatedMp3Sizes: Record<AudioQuality, string>
-  estimatedMp4Sizes: Record<VideoProfile, Record<VideoQuality, string>>
 }> {
   const cleanUrl = cleanVideoUrl(url)
   const videoId = extractVideoId(cleanUrl)!
@@ -176,24 +170,12 @@ export async function getVideoInfo(url: string): Promise<{
     ]),
   ) as Record<AudioQuality, string>
 
-  const estimatedMp4Sizes = {
-    compatible: Object.fromEntries(
-      VIDEO_QUALITIES.map((quality) => [quality, 'Unknown']),
-    ) as Record<VideoQuality, string>,
-    best: Object.fromEntries(
-      VIDEO_QUALITIES.map((quality) => [quality, 'Unknown']),
-    ) as Record<VideoQuality, string>,
-  } satisfies Record<VideoProfile, Record<VideoQuality, string>>
-
   return {
     title,
     duration: formatDuration(totalSeconds),
     durationSeconds: totalSeconds,
     thumbnail,
-    highestQuality: 'Unknown',
     estimatedMp3Size: estimatedMp3SizeValue,
-    estimatedMp4Size: 'Unknown',
     estimatedMp3Sizes,
-    estimatedMp4Sizes,
   }
 }

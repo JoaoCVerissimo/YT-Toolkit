@@ -18,11 +18,8 @@ export interface VideoInfo {
   duration: string
   durationSeconds: number
   thumbnail: string
-  highestQuality: string
   estimatedMp3Size: string
-  estimatedMp4Size: string
   estimatedMp3Sizes: Record<AudioQuality, string>
-  estimatedMp4Sizes: Record<VideoProfile, Record<VideoQuality, string>>
 }
 
 export interface IdentifiedTrack {
@@ -107,16 +104,16 @@ export const VIDEO_PROFILE_OPTIONS: Array<{
   },
 ]
 
-export function getVideoQualityLabel(value: VideoQuality): string {
+export function getAudioQualityLabel(value: AudioQuality): string {
   return (
-    VIDEO_QUALITY_OPTIONS.find((option) => option.value === value)?.label ||
+    AUDIO_QUALITY_OPTIONS.find((option) => option.value === value)?.label ||
     value
   )
 }
 
-export function getAudioQualityLabel(value: AudioQuality): string {
+export function getVideoQualityLabel(value: VideoQuality): string {
   return (
-    AUDIO_QUALITY_OPTIONS.find((option) => option.value === value)?.label ||
+    VIDEO_QUALITY_OPTIONS.find((option) => option.value === value)?.label ||
     value
   )
 }

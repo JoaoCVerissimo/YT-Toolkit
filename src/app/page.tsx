@@ -30,12 +30,6 @@ export default function Home() {
 
   const isDownloading = activeDownloadId !== null
   const areActionsDisabled = isDownloading
-  const selectedMp4Estimate =
-    videoInfo?.estimatedMp4Sizes?.[settings.videoProfile]?.[
-      settings.videoQuality
-    ] ||
-    videoInfo?.estimatedMp4Size ||
-    'Unknown'
   const selectedMp3Estimate =
     videoInfo?.estimatedMp3Sizes?.[settings.audioQuality] ||
     videoInfo?.estimatedMp3Size ||
@@ -260,7 +254,6 @@ export default function Home() {
             audioQuality={settings.audioQuality}
             videoQuality={settings.videoQuality}
             videoProfile={settings.videoProfile}
-            selectedMp4Estimate={selectedMp4Estimate}
             selectedMp3Estimate={selectedMp3Estimate}
             loading={loading}
             areActionsDisabled={areActionsDisabled}

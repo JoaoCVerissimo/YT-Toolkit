@@ -16,7 +16,6 @@ interface VideoCardProps {
   audioQuality: AudioQuality
   videoQuality: VideoQuality
   videoProfile: VideoProfile
-  selectedMp4Estimate: string
   selectedMp3Estimate: string
   loading: string | null
   areActionsDisabled: boolean
@@ -33,7 +32,6 @@ export function VideoCard({
   audioQuality,
   videoQuality,
   videoProfile,
-  selectedMp4Estimate,
   selectedMp3Estimate,
   loading,
   areActionsDisabled,
@@ -58,9 +56,6 @@ export function VideoCard({
           <p className="mb-1 text-sm text-gray-500">
             Duration: {videoInfo.duration}
           </p>
-          <p className="mb-4 text-sm text-gray-500">
-            Highest source quality: {videoInfo.highestQuality}
-          </p>
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
               <h3 className="mb-2 text-sm font-semibold">MP4 video</h3>
@@ -69,9 +64,6 @@ export function VideoCard({
               </p>
               <p className="text-sm text-gray-500">
                 Profile: {getVideoProfileLabel(videoProfile)}
-              </p>
-              <p className="text-sm text-gray-500">
-                Estimated size: {selectedMp4Estimate}
               </p>
             </div>
 
