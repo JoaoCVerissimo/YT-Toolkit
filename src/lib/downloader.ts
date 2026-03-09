@@ -9,8 +9,9 @@ import {
 } from 'fs'
 import { stat } from 'fs/promises'
 import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { Readable } from 'stream'
+import { getFfmpegDir, getYtDlpPath } from './binaries'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -191,33 +192,6 @@ export function getDownloadStatus(downloadId: string): {
 }
 
 // ---------------------------------------------------------------------------
-// Tool paths
-// ---------------------------------------------------------------------------
-
-function getYtDlpPath(): string {
-  const candidate = join(
-    process.cwd(),
-    'node_modules',
-    'youtube-dl-exec',
-    'bin',
-    'yt-dlp',
-  )
-  if (existsSync(candidate)) return candidate
-  return 'yt-dlp'
-}
-
-function getFfmpegLocation(): string {
-  const candidate = join(
-    process.cwd(),
-    'node_modules',
-    'ffmpeg-static',
-    'ffmpeg',
-  )
-  if (existsSync(candidate)) return dirname(candidate)
-  return ''
-}
-
-// ---------------------------------------------------------------------------
 // File helpers
 // ---------------------------------------------------------------------------
 
@@ -378,7 +352,8 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
     signal,
   } = params
   const ytdlp = getYtDlpPath()
-  const ffmpegLocation = getFfmpegLocation()
+  const ffmpegLocation = getFfmpegDir()
+  console.log(`[yt-toolkit] yt-dlp: ${ytdlp}, ffmpeg dir: ${ffmpegLocation || '(system)'}`)
   const tmpDir = getTmpDir()
   const id = Date.now().toString(36)
   const videoId = cleanUrl.replace(/.*v=/, '').replace(/&.*/, '')
@@ -426,14 +401,17 @@ async function downloadToFile(params: DownloadParams): Promise<Response> {
   })
 
   child.once('error', (error) => {
-    if (!stderr) stderr = error.message
+    stderr = error.message
+    console.error(`[yt-toolkit] spawn error for ${ytdlp}:`, error.message)
   })
 
   const actualFile = await new Promise<string>((resolve, reject) => {
     child.once('close', (code) => {
       if (code !== 0) {
+        const shortErr =
+          stderr.trim().split('\n').pop() || `yt-dlp exited with code ${code}`
         console.error(`[yt-toolkit] download failed (${downloadId}):`, stderr)
-        finalizeDownloadJob(downloadId, 'failed', 'Download failed.')
+        finalizeDownloadJob(downloadId, 'failed', shortErr)
         reject(new Error('Download failed'))
         return
       }

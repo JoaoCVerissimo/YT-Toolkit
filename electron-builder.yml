@@ -1,0 +1,47 @@
+appId: com.yt-toolkit.app
+productName: YT Toolkit
+
+files:
+  - electron/**/*
+  - package.json
+
+extraResources:
+  # Next.js standalone server (pre-assembled by prepare-electron.js)
+  - from: "app-server"
+    to: "standalone"
+    filter:
+      - "**/*"
+
+mac:
+  target: dmg
+  extraResources:
+    - from: "binaries/mac-arm64/"
+      to: "bin"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  extraResources:
+    - from: "binaries/win-x64/"
+      to: "bin"
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: YT Toolkit
+  uninstallDisplayName: YT Toolkit
+  deleteAppDataOnUninstall: true
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

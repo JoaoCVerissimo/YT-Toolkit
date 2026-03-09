@@ -79,33 +79,6 @@ export function SummarySection({
 }: SummarySectionProps) {
   const [showTranscript, setShowTranscript] = useState(false)
 
-  async function exportAsPdf() {
-    const res = await fetch('/api/export-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: videoInfo?.title,
-        duration: videoInfo?.duration,
-        summary: summaryData.summary,
-        keyPoints: summaryData.keyPoints,
-        transcript: summaryData.transcript,
-      }),
-    })
-
-    if (!res.ok) {
-      showToast('Failed to generate PDF.')
-      return
-    }
-
-    const blob = await res.blob()
-    triggerDownload(
-      `${videoInfo?.title || 'youtube-summary'}.pdf`,
-      blob,
-      'application/pdf',
-    )
-    showToast('PDF exported.')
-  }
-
   async function copySummary() {
     await navigator.clipboard.writeText(summaryData.summary)
     showToast('Summary copied to clipboard.')
@@ -176,12 +149,6 @@ export function SummarySection({
             className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800"
           >
             Export MD
-          </button>
-          <button
-            onClick={exportAsPdf}
-            className="rounded-lg bg-emerald-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-900"
-          >
-            Export PDF
           </button>
         </div>
       </div>

@@ -1,6 +1,5 @@
 import { spawn } from 'child_process'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { getYtDlpPath } from './binaries'
 
 type YtDlpSubtitleTrack = {
   ext?: string
@@ -10,18 +9,6 @@ type YtDlpSubtitleTrack = {
 type YtDlpSubtitleInfo = {
   subtitles?: Record<string, YtDlpSubtitleTrack[]>
   automatic_captions?: Record<string, YtDlpSubtitleTrack[]>
-}
-
-function getYtDlpPath(): string {
-  const candidate = join(
-    process.cwd(),
-    'node_modules',
-    'youtube-dl-exec',
-    'bin',
-    'yt-dlp',
-  )
-
-  return existsSync(candidate) ? candidate : 'yt-dlp'
 }
 
 const RE_XML_TRANSCRIPT =

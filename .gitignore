@@ -46,5 +46,10 @@ next-env.d.ts
 # youtube cookies
 cookies.txt
 
+# electron
+/dist/
+/binaries/
+/app-server/
+
 # claude code
 .claude/settings.local.json
